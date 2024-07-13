@@ -15,40 +15,41 @@ class Dataset2DSL(data.Dataset):
         
         """
         Parameters:            
-            - csv_path (string): percorso al file csv con le annotazioni
-            - dataset_name (string): nome del dataset con cui allenare e anche folder da cui prendere i dati
-            - transform (torchvision.transforms.Compose): da applicare alle immagini, eg, resize, flip, totensor, etc..
-            - use_label (boolean): consider or discard y-label information    
+            - csv_path (string): percorso al file csv con le annotazioni 注釈を含むcsvファイルへのパス
+            - dataset_name (string): nome del dataset con cui allenare e anche folder da cui prendere i dati 学習するデータセットの名前と、データを取得するフォルダ。
+            - transform (torchvision.transforms.Compose): da applicare alle immagini, eg, resize, flip, totensor, etc.. リサイズ、フリップ、トーテンソルなど、画像に適用できます。
+            - use_label (boolean): consider or discard y-label information Yラベル情報を考慮または破棄する。
         """
         
         self.info = pd.read_csv(csv_path)
-        self.dir_path = os.path.join(os.getcwd(),"dataset_PICAI","cropped_images",dataset_name)
+        self.dir_path = os.path.join(os.getcwd(),"dataset_PICAI","cropped_images",dataset_name) # /現在の作業ディレクトリ/dataset_PICAI/cropped_images/data_setに格納されたフォルダ　のように構築される os.path.joinは複数のコンポーネントを結合してパスを構築、os.getcwdはカレントディレクトリの絶対パスを取得
+
         self.CONDITIONING_FEATURE = CONDITIONING_FEATURE
         self.transform = transform
         self.use_label= use_label
        
-    def __len__ (self):
-            return len(self.info)
+    def __len__ (self): # このクラス内でのlen関数の機能を設定
+            return len(self.info) # データフレームの行数を返す、与えられたデータの長さを返す
         
-    def __getitem__(self, idx): 
-            if torch.is_tensor(idx): # se idx è un tensore
-                idx = idx.tolist() # lo converto in una lista
-            patient = str(self.info.iloc[idx]['patient_id'])
-            study = str(self.info.iloc[idx]['study_id'])
-            slice_number = str(self.info.iloc[idx]['slice'])
+    def __getitem__(self, idx):  # このクラス内でのgetitem()という関数を定義、機能を設定
+            if torch.is_tensor(idx): # se idx è un tensore、idxがテンソルかどうかを判別する関数
+                idx = idx.tolist() # lo converto in una lista、idxをリストに変換
+            patient = str(self.info.iloc[idx]['patient_id']) # infoに格納されたデータ内のidx行、'patient_id'の列名にある値をilocで抽出し、文字列としてpatientに格納、患者のidを取得している？
+            study = str(self.info.iloc[idx]['study_id']) # infoに格納されたデータ内のidx行、'study_id'の列名にある値をilocで抽出し、文字列としてstudyに格納
+            slice_number = str(self.info.iloc[idx]['slice']) # infoに格納されたデータ内のidx行、'slice'の列名にある値をilocで抽出し、文字列としてslice_numberに格納
 
-            image_path = os.path.join(self.dir_path, f"{patient}_{study}_{slice_number}.png")
-            image = Image.open(image_path)
+            image_path = os.path.join(self.dir_path, f"{patient}_{study}_{slice_number}.png") # dir_pathとf"{patient}_{study}_{slice_number}.pngを連結したパスを構築
+            image = Image.open(image_path) # 指定したパス先の画像を読みこみimageに格納
             ##
 
-            if self.use_label:
+            if self.use_label: # yラベルがあった場合
                 
-                if self.CONDITIONING_FEATURE == "aggressiveness":
-                    label = str(self.info.iloc[idx]['label'])
-                    if label == 'LG':
-                        label = np.array(0)
+                if self.CONDITIONING_FEATURE == "aggressiveness": # CONDITIONING_FEATUREが'aggressiveness'の場合
+                    label = str(self.info.iloc[idx]['label']) # infoのidx行、'label'列名にある値を抽出し、labelに格納
+                    if label == 'LG': # labelが'LG'だった場合
+                        label = np.array(0) # ラベルを0に設定
                     else:
-                        label = np.array(1)
+                        label = np.array(1) # 'LGでない場合はラベルを1に設定
                 elif self.CONDITIONING_FEATURE == "no_tumour": # 1 may 2023
                     histopath_type=str(self.info.iloc[idx]['histopath_type'])
                     label = np.array(0) if (histopath_type=='' or histopath_type==None) else np.array(1)
