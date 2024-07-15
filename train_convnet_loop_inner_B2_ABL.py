@@ -37,7 +37,7 @@ os.environ['TORCH_HOME']=mydir
 ##
 
 print()
-print("###### ABLATION STUDIES ######")
+print("###### ABLATION STUDIES ######") # アブレーション(ablation) とは，機械学習の予測モデル(特に人工ニューラルネットワーク)において，構成要素の一部分を取り除いて実験を行い，結果を比較すること
 print()
 
 parser = argparse.ArgumentParser(description="Training script for a convnetm with ABLATION network.")

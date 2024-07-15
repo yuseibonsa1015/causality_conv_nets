@@ -4,7 +4,7 @@ import argparse
 from ast import literal_eval
 
 #Matplotlib created a temporary config/cache directory at /tmp/matplotlib-6772vh08 because the default path (/.config/matplotlib) is not a writable directory; it is highly recommended to set the MPLCONFIGDIR environment variable to a writable directory, in particular to speed up the import of Matplotlib and to better support multiprocessing.
-os.environ['MPLCONFIGDIR'] = os.getcwd() + "/configs/"
+os.environ['MPLCONFIGDIR'] = os.getcwd() + "/configs/" # カレントディレクトリのconfigsをmatplotlibの設定ディレクトリとする、import matplotlib.pyplot as pltの前に設定することによってmatplotlibがconfigsフォルダを設定ディレクトリとして設定される
 
 from datetime import datetime
 import numpy as np
@@ -28,16 +28,16 @@ import glob
 # The first step would be to run everything without the --user tag on the container, thus using default root priviledge, and make torch download the
 # weights into our created 'pretrained_models' dir. Then, for every other experiment we'd need to run, we can set the --user tag in the container
 # as requested by some clsuter system admins, and the script will load the pretrained weights that we saved at the previous step.
-mydir=os.path.join(os.getcwd(), 'pretrained_models') ## these are the regular ImageNet-trained CV models, like resnets weights.
-torch.hub.set_dir(mydir)
-os.environ['TORCH_HOME']=mydir
+mydir=os.path.join(os.getcwd(), 'pretrained_models') # カレントディレクトリ内の'pretrained_models'フォルダ（あるかどうかにかかわらず）へのパスをmydirに格納 ## these are the regular ImageNet-trained CV models, like resnets weights.これらは通常のImageNetで学習されたCVモデルで、resnetsの重みのようなものです。
+torch.hub.set_dir(mydir) #  pytorch内のキャッシュディレクトリの設定、set_dirで指定したパス先のフォルダをキャッシュディレクトリに設定、torch.hubは事前学習済みのモデルをダウンロードして利用できる機能、キャッシュディレクトリは一時的に保存するための場所
+os.environ['TORCH_HOME']=mydir # Python全体のキャッシュディレクトリの設定、指定したパス先のフォルダをキャッシュディレクトリに設定、
 
 ## If you need to debug NaN and None values throughout your script, forward(), and back-prop.. setting this flag to True can be useful
 # torch.autograd.set_detect_anomaly(True)
 
 #
-parser = argparse.ArgumentParser(description="Training script for a convnet.")
-parser.add_argument("--number_of_gpus",type=int,default=1,help="The number of GPUs you intend to use")
+parser = argparse.ArgumentParser(description="Training script for a convnet.") # コマンドラインで引数を指定できるように設定、argparse.ArgumentParserをインスタンス化、description="Training script for a convnet.でparserの簡単な説明を追加、実行ファイル--helpで表示される、add_argumentでコマンドラインで任意の引数を渡せるよう設定
+parser.add_argument("--number_of_gpus",type=int,default=1,help="The number of GPUs you intend to use") # '--number_of_gpus'という引数指定、typeで引数の型を指定、defaultで引数が指定されなかった場合のデフォルト値を指定、helpでヘルプメッセージを追加
 parser.add_argument("--gpus_ids",type=str,default="0",help="The comma separated list of integers representing the id of requested GPUs - such as '0,1'")
 parser.add_argument("--SEED",type=int,default=42,help="fix seed to set reproducibility, eg, seed=42")
 parser.add_argument("--EXPERIMENT",type=str,default="breakhis",help="geometric_dataset, prostate, imagenette, procancer, breakhis")
@@ -48,114 +48,114 @@ parser.add_argument("--BATCH_SIZE_VALID",type=int,default=1,help=" 1 image")
 parser.add_argument("--BATCH_SIZE_TEST",type=int,default=1,help=" 1 image")
 parser.add_argument("--NUMBER_OF_EPOCHS",type=int,default=200,help="eg, 100, eventually early stopped")
 parser.add_argument("--MODEL_TYPE",type=str,default="resnet18",help="eg, EqualCNN, alexnet, SimpleCNN, EqualCNN, BaseCNN, LightCNN, resnet18, resnet34, resnet50, resnet101, ")
-parser.add_argument("--LR",type=str,default="[0.01,0.001]",help="list of str of floats, eg, [0.0003, 0.001]")
+parser.add_argument("--LR",type=str,default="[0.01,0.001]",help="list of str of floats, eg, [0.0003, 0.001]") # default="[0.01,0.001]"はデフォルトの引数が[0.01,0.001]というリスト
 parser.add_argument("--WD",type=str,default="[0.01,0.01,0.001]",help="list of str of floats, eg, [0.0003, 0.001]")
 parser.add_argument("--CAUSALITY_AWARENESS_METHOD", type=str, default="[None, 'max', 'lehmer']", help="[None, 'max', 'lehmer']")
 parser.add_argument("--LEHMER_PARAM", type=str, default="[-2,-1,0,1,2]",help="if using Lehmer mean, which power utilize among: [-100,-1,0,1,2,100]")
 parser.add_argument("--CAUSALITY_SETTING", type=str, default="['mulcat','mulcatbool']",help="if CA, which setting to use, eg: ['cat','mulcat']")
 parser.add_argument("--MULCAT_CAUSES_OR_EFFECTS", type=str, default="['causes','effects']", help="if CA, which one to use for causality factors computation: ['causes','effects']")
-parser.add_argument("--which_resnext_to_use",type=str, choices=["tiny","base"])
+parser.add_argument("--which_resnext_to_use",type=str, choices=["tiny","base"]) # choicesは引数として許可される値のリストを指定
 parser.add_argument("--is_pretrained",type=str, choices=["True","False"], default="False")
-args = parser.parse_args()
+args = parser.parse_args() # 上記で指定した引数を解析、argに格納
 
 ###repoducibility:#############
-SEED = args.SEED
-torch.manual_seed(SEED)
-random.seed(SEED)
-np.random.seed(SEED)
-torch.cuda.manual_seed_all(SEED) 
+SEED = args.SEED # コマンドライン引数として渡されたSEEDという変数の値をSEEDに格納
+torch.manual_seed(SEED) # torch内の乱数生成器のシード値を設定
+random.seed(SEED) # pythonのライブラリ'random'のシード値を設定
+np.random.seed(SEED) # numpy内のシード値を設定
+torch.cuda.manual_seed_all(SEED) # pythonのgpuで使用されるすべての乱数生成器のシード値を設定、複数のgpuを使っても同じシード値で乱数生成できる
 
 #model
-model_type = args.MODEL_TYPE
-which_resnext_to_use=""
-if model_type=="resnext":
-    which_resnext_to_use=args.which_resnext_to_use
+model_type = args.MODEL_TYPE # コマンドライン引数で渡された'MODEL_TYPE'の値をmodel_typeに格納
+which_resnext_to_use="" # which_resnext_to_useを空の文字列で初期化
+if model_type=="resnext": # model_typeに渡された文字列が'resnext'の場合
+    which_resnext_to_use=args.which_resnext_to_use # コマンドライン引数で渡したwhich_resnext_to_useの値をwhich_resnext_to_useに格納
 
 #causality awareness and related settings
-causality_awareness_method = literal_eval(args.CAUSALITY_AWARENESS_METHOD) #[None, 'max', 'lehmer']
-LEHMER_PARAM = literal_eval(args.LEHMER_PARAM)  #"[-100,-2,-1,0,1,100]"
-CAUSALITY_SETTING = literal_eval(args.CAUSALITY_SETTING) #['cat','mulcat','mulcatbool']
-MULCAT_CAUSES_OR_EFFECTS = literal_eval(args.MULCAT_CAUSES_OR_EFFECTS) #['causes','effects']
+causality_awareness_method = literal_eval(args.CAUSALITY_AWARENESS_METHOD) #[None, 'max', 'lehmer'] # 渡した文字列をpythonオブジェクトに変更、literal_evalはpythonの組み込みモジュールast、
+LEHMER_PARAM = literal_eval(args.LEHMER_PARAM)  #"[-100,-2,-1,0,1,100]" # 渡した文字列をpythonオブジェクトに変換、格納
+CAUSALITY_SETTING = literal_eval(args.CAUSALITY_SETTING) #['cat','mulcat','mulcatbool'] # 渡した文字列をpythonオブジェクトに変換、格納
+MULCAT_CAUSES_OR_EFFECTS = literal_eval(args.MULCAT_CAUSES_OR_EFFECTS) #['causes','effects'] # 渡した文字列をpythonオブジェクトに変換、格納
 
-#define some settings about data, paths, training params, etc.
+#define some settings about data, paths, training params, etc. # データ、パス、トレーニングパラメータなどの設定を定義
 image_size = args.IMAGE_SIZE
 batch_size_train = args.BATCH_SIZE_TRAIN
 batch_size_valid = args.BATCH_SIZE_VALID
 batch_size_test = args.BATCH_SIZE_TEST
-epochs = args.NUMBER_OF_EPOCHS
+epochs = args.NUMBER_OF_EPOCHS # コマンドライン引数で渡した値を格納
 LR = literal_eval(args.LR) #list of floats, "[0.001,0.0003]"
-wd = literal_eval(args.WD)
+wd = literal_eval(args.WD) # 渡した文字列をpythonオブジェクトに変換、格納
 
 #some other settings
-loss_type="CrossEntropyLoss"
-is_pretrained = args.is_pretrained
-if is_pretrained=="False":
+loss_type="CrossEntropyLoss" # 文字列"CrossEntropyLoss"をloss_typeに格納
+is_pretrained = args.is_pretrained # コマンドライン引数で渡した値を格納
+if is_pretrained=="False": # is_pretrainedに格納した文字列が"True"ならTrue、"False"ならFalseをis_pretrainedに再格納
     is_pretrained=False
 elif is_pretrained=="True":
     is_pretrained=True
-print(f"is_pretrained: {is_pretrained}")
-is_feature_extractor = False
+print(f"is_pretrained: {is_pretrained}") # is_pretrainedの値を出力
+is_feature_extractor = False # Falseを格納
 
-csv_path=""
-train_root_path = val_root_path = test_root_path = ""
+csv_path="" # 空の文字列で初期化
+train_root_path = val_root_path = test_root_path = "" # 複数の変数に空の文字列で初期化
 
-if args.EXPERIMENT == "prostate":
-    dataset_name=""
-    CONDITIONING_FEATURE = args.CONDITIONING_FEATURE
-    channels = 1
-    num_classes = 2
-    if CONDITIONING_FEATURE == "aggressiveness": # lesion aggressiveness labels: LG and HG
-        dataset_name = "UNFOLDED_DATASET_5_LOW_RESOLUTION_NORMALIZED_GUIDED_CROP_GUIDED_SLICE_SELECTION"
-        csv_path = os.path.join(os.getcwd(),"dataset_PICAI","csv_files","cs_les_unfolded.csv") 
-    elif CONDITIONING_FEATURE == "disease_yes_no": 
-        dataset_name = "UNFOLDED_DATASET_DISEASE_YES_NO"
-        csv_path = os.path.join(os.getcwd(),"dataset_PICAI","csv_files","unfolded_disease_YesNo_balanced.csv")
+if args.EXPERIMENT == "prostate": # コマンドライン引数で渡したEXPERIMENTの値が"prostate"の場合、prostate：前立腺
+    dataset_name="" # 空の文字列で初期化
+    CONDITIONING_FEATURE = args.CONDITIONING_FEATURE # コマンドライン引数で渡した値（文字列）をCONDITIONING_FEATUREに格納
+    channels = 1 # チャネル数
+    num_classes = 2 # 分類クラスの数
+    if CONDITIONING_FEATURE == "aggressiveness": # lesion aggressiveness labels: LG and HG # CONDITIONING_FEATUREが"aggressiveness"の場合、aggressiveness：攻撃性
+        dataset_name = "UNFOLDED_DATASET_5_LOW_RESOLUTION_NORMALIZED_GUIDED_CROP_GUIDED_SLICE_SELECTION" # データセットの名前を設定、文字列として変数に格納
+        csv_path = os.path.join(os.getcwd(),"dataset_PICAI","csv_files","cs_les_unfolded.csv") # 指定したファイルまでのパスを作成、csv_pathに格納
+    elif CONDITIONING_FEATURE == "disease_yes_no": # CONDITIONING_FEATUREが"disease_yes_no"の場合
+        dataset_name = "UNFOLDED_DATASET_DISEASE_YES_NO" # データセットの名前を設定、文字列として変数に格納
+        csv_path = os.path.join(os.getcwd(),"dataset_PICAI","csv_files","unfolded_disease_YesNo_balanced.csv") # 指定したファイルまでのパスを作成、csv_pathに格納
 
-elif args.EXPERIMENT == "breakhis": #TODO 31 oct 2023
-    dataset_name=""
-    CONDITIONING_FEATURE = args.CONDITIONING_FEATURE
-    channels = 3
-    num_classes = 2
-    if CONDITIONING_FEATURE == "aggressiveness":
-        csv_path = os.path.join(os.getcwd(),"dataset_breakhis","csv_files","breakhis_metadata_400X.csv") ##
+elif args.EXPERIMENT == "breakhis": #TODO 31 oct 2023 # breakhis：乳がん？# コマンドライン引数で渡したEXPERIMENTの値が"breakhis"の場合
+    dataset_name="" # 空の文字列で初期化
+    CONDITIONING_FEATURE = args.CONDITIONING_FEATURE # コマンドライン引数で渡した値を変数で格納
+    channels = 3 # チャネル数
+    num_classes = 2 # クラス数
+    if CONDITIONING_FEATURE == "aggressiveness":# CONDITIONING_FEATUREが"aggressiveness"の場合
+        csv_path = os.path.join(os.getcwd(),"dataset_breakhis","csv_files","breakhis_metadata_400X.csv") ## 指定したファイルまでのパスを作成、変数に格納
          
 else:
-    raise ValueError
-print(f"Dataset_name: {dataset_name}\n  csv_path: {csv_path}")
+    raise ValueError # 条件以外の場合、エラーを発生させる
+print(f"Dataset_name: {dataset_name}\n  csv_path: {csv_path}") # データセットの名前とパスを出力
 ###############################
 
 
 
-NUM_GPUS = args.number_of_gpus #1 #2 TODO
+NUM_GPUS = args.number_of_gpus #1 #2 TODO # 使用するGPUの数を設定、コマンドライン引数で渡した値を格納
 
-list_of_GPU_ids = list(args.gpus_ids)
-list_of_GPU_ids = list(filter((",").__ne__, list_of_GPU_ids))
+list_of_GPU_ids = list(args.gpus_ids) # GPUのid（文字列）をリストとして設定、コマンドライン引数で渡した値を格納
+list_of_GPU_ids = list(filter((",").__ne__, list_of_GPU_ids)) # list_of_GPU_idsのコンマを除去、filter()の第一引数に関数、第二引数にイテラブルで関数がイテラブルに適用され、結果がTrueのものだけフィルタリングされる、(",").__ne__は","ではないものをTrueとする、(",").__ne__("a")は、コンマと文字 "a" を比較し、それらが異なるオブジェクトであるためにTrueを返す
 
-class EarlyStopper:
-    def __init__(self, patience=1, min_delta=0):
-        self.patience = patience
-        self.min_delta = min_delta
-        self.counter = 0
-        self.min_validation_loss = np.inf
-    def early_stop(self, validation_loss, epoch):
+class EarlyStopper: # 過学習を防ぐために学習の早期終了を行うクラスを定義、
+    def __init__(self, patience=1, min_delta=0): 
+        self.patience = patience # 連続して検証損失(validation_loss)が更新（改善）しない許容回数
+        self.min_delta = min_delta # 検証損失が更新されたとみなす最小の変化量、早期停止の条件となる閾値
+        self.counter = 0 # 検証損失が更新されないエポックのカウンター
+        self.min_validation_loss = np.inf # 観測された検証損失の最小値、最初は無限大(np.inf)で初期化
+    def early_stop(self, validation_loss, epoch): 
 
-        if validation_loss < self.min_validation_loss:
-            self.min_validation_loss = validation_loss
-            self.counter = 0
-        elif validation_loss > (self.min_validation_loss + self.min_delta):
-            self.counter += 1
-            if self.counter >= self.patience:
-                return True
-        return False    
-    def get_patience_and_minDelta(self):
-        return (self.patience, self.min_delta)
+        if validation_loss < self.min_validation_loss: # 観測された検証損失が最小検証損失より小さい場合
+            self.min_validation_loss = validation_loss # 最小検証損失を更新
+            self.counter = 0 # カウンターをリセット
+        elif validation_loss > (self.min_validation_loss + self.min_delta): # 観測された検証損失が（最小検証損失+閾値）より大きい場合
+            self.counter += 1 # カウンターをカウント
+            if self.counter >= self.patience: # カウンターが許容回数以上になった場合
+                return True # Trueを返す
+        return False # 許容回数を超えず、学習が終了した場合、Falseを返す
+    def get_patience_and_minDelta(self): # 許容回数と閾値を返す関数
+        return (self.patience, self.min_delta) # 値を返す
 
 
 
 def main(rank, world_size, causality_awareness, learning_rate, weight_decay, causality_method=None, lehmer_param=None, causality_setting="cat",mulcat_causes_or_effects="causes"):
 
-    print(torch.cuda.is_available()) 
-    os.environ['CUDA_VISIBLE_DEVICES'] = list_of_GPU_ids[rank]
+    print(torch.cuda.is_available()) # 現在の環境でCUDAが利用可能かを出力、可能ならTrue、不可能ならFalse
+    os.environ['CUDA_VISIBLE_DEVICES'] = list_of_GPU_ids[rank] # 特定のGPUを使えるように環境変数'CUDA_VISIBLE_DEVICES'にlist_of_GPU_idのrank(mainの引数、使いたいGPUに対応するindexを入力）行の値に設定
     
     from torch.nn.parallel import DistributedDataParallel as DDP
     import torch.distributed as dist
@@ -166,17 +166,18 @@ def main(rank, world_size, causality_awareness, learning_rate, weight_decay, cau
     from split_train_val_test import get_or_create_datasetsCSVpaths
     from pathlib import Path   
 
-    results_folder = Path("./results_YOUR_EXPERIMENT") #TODO <------ set your desired output folder based on your experiments
-    results_folder.mkdir(exist_ok = True)
+    results_folder = Path("./results_YOUR_EXPERIMENT") #TODO <------ set your desired output folder based on your experiments # 実験結果を保存するためのフォルダへのパスを作成、path(任意)でカレントディレクトリ内の任意のパスを作成、results_folderに格納
+    results_folder.mkdir(exist_ok = True) # 実験結果を保存するためのフォルダへのパスresults_folderに対応したフォルダが存在しない場合、mkdir()でディレクトリを作成、exist_ok = Trueはすでに存在する場合を許容（存在してもエラーが発生しない、parents=Trueを定義すると中間ディレクトリも含めて作成される
 
     ## Set some stuff for the torch DDP setting, that is valid also for the single GPU setting anyway 
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
-    print(f"CUDA_VISIBLE_DEVICES: {os.environ['CUDA_VISIBLE_DEVICES']}")   
+    os.environ['MASTER_ADDR'] = 'localhost' # 環境変数'MASTER_ADDR'を'localhost'に設定、'MASTER_ADDR'：分散処理を行う際に、マスター（親）プロセスのアドレスを指定するための環境変数、親をローカル（現在のコンピュータ）に設定
+    os.environ['MASTER_PORT'] = '12355' # 環境変数'MASTER_PORT'を'12355'に設定、'MASTER_PORT'：分散処理を行う際に、マスター（親）プロセスがリスニングするポート番号を指定するための環境変数
+    print(f"CUDA_VISIBLE_DEVICES: {os.environ['CUDA_VISIBLE_DEVICES']}") # 環境変数'CUDA_VISIBLE_DEVICES'の値（使用するGPUのid）を出力、CUDA_VISIBLE_DEVICES：使用するGPUをIDで可視化するための環境変数
+
     
     ### Regarding torch DDP stuff, we need to specify which backend to use:
     ## if linux OS, then use "nccl";        
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+    dist.init_process_group("nccl", rank=rank, world_size=world_size) # 分散処理のためのプロセスグループを初期化、dist：分散処理のためのAPIを提供するモジュール、init_process_group：プロセスグループを初期化する関数、'nccl'：通信バックエンドとしてnccl(NVIDIA Collective Communications Library)を指定、ranK=rankは現座のプロセスのランク（ID)を指定、world_size：全プロセスの総数を指定
     ## if Windows, use "gloo" instead: #TODO
     # os.environ["PL_TORCH_DISTRIBUTED_BACKEND"] = "gloo"
     # dist.init_process_group("gloo", rank=rank, world_size=world_size)
