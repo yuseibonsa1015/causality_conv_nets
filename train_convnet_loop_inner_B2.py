@@ -187,21 +187,21 @@ def main(rank, world_size, causality_awareness, learning_rate, weight_decay, cau
     if args.EXPERIMENT == "prostate": # prostate PI-CAI
         from dataset_creator import Dataset2DSL
 
-        my_transform = Compose([
-            transforms.Resize((image_size,image_size)),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
+        my_transform = Compose([ # Composeで一連の変換を順番に適用
+            transforms.Resize((image_size,image_size)), # 画像のサイズを(image_size,image_size)にリサイズ
+            transforms.RandomHorizontalFlip(), # ランダムに画像を水平反転（左右反転）させる
+            transforms.ToTensor(), # 画像をPyTorchのテンソルに変換
             # transforms.Lambda(lambda t: (t * 2) - 1) #TODO
         ])
 
-        my_transform_valid_and_test = Compose([
-            transforms.Resize((image_size,image_size)),
-            transforms.ToTensor(),
+        my_transform_valid_and_test = Compose([ 
+            transforms.Resize((image_size,image_size)), # # 画像のサイズを(image_size,image_size)にリサイズ
+            transforms.ToTensor(), # 画像をPyTorchのテンソルに変換
             # transforms.Lambda(lambda t: (t * 2) - 1) #TODO 
         ])
 
         
-        path_to_train_csv, path_to_val_csv, _ = get_or_create_datasetsCSVpaths(EXPERIMENT=args.EXPERIMENT, CONDITIONING_FEATURE=CONDITIONING_FEATURE, csv_path=csv_path, testset_size=0.2, validset_size=0.15)
+        path_to_train_csv, path_to_val_csv, _ = get_or_create_datasetsCSVpaths(EXPERIMENT=args.EXPERIMENT, CONDITIONING_FEATURE=CONDITIONING_FEATURE, csv_path=csv_path, testset_size=0.2, validset_size=0.15) # データを分割
         dataset_train = Dataset2DSL(csv_path=path_to_train_csv, dataset_name=dataset_name, CONDITIONING_FEATURE=CONDITIONING_FEATURE, transform=my_transform, use_label=True)
         dataset_val = Dataset2DSL(csv_path=path_to_val_csv, dataset_name=dataset_name, CONDITIONING_FEATURE=CONDITIONING_FEATURE, transform=my_transform_valid_and_test, use_label=True)       
 

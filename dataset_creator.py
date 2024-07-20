@@ -41,7 +41,7 @@ class Dataset2DSL(data.Dataset):
             image_path = os.path.join(self.dir_path, f"{patient}_{study}_{slice_number}.png") # dir_pathとf"{patient}_{study}_{slice_number}.pngを連結したパスを構築
             image = Image.open(image_path) # 指定したパス先の画像を読みこみimageに格納
             ##
-
+            
             if self.use_label: # yラベルがあった場合
                 
                 if self.CONDITIONING_FEATURE == "aggressiveness": # CONDITIONING_FEATUREが'aggressiveness'の場合

@@ -13,28 +13,28 @@ import random
 # and therefore they are here not completely coded nor tested. Please use the settings as in the main published paper.
 
 ######
-class STEFunction(torch.autograd.Function):
+class STEFunction(torch.autograd.Function): # Mulcat手法に使う
     '''
     https://discuss.pytorch.org/t/binary-activation-function-with-pytorch/56674/4
     '''
     @staticmethod
-    def forward(ctx, input):
-        return (input > 0).float()
+    def forward(ctx, input): # 順伝搬を実行, 'ctx'はコンテキストオブジェクト（バックプロパゲーション中に必要な情報を保存するために使用？）, 'input'はテンソルで、順伝搬の入力
+        return (input > 0).float() # 出力はinputが0を超えるかどうかでバイナリ出力
     @staticmethod
-    def backward(ctx, grad_output):
-        return F.hardtanh(grad_output)
-class StraightThroughEstimator(nn.Module):
+    def backward(ctx, grad_output): # 逆伝搬を実行, 'grad_output'は次のレイヤから伝搬される勾配
+        return F.hardtanh(grad_output) #出力はhardtanh関数で勾配を-1から1の間に制限
+class StraightThroughEstimator(nn.Module): # 親クラスがnn.Module, Mulcat手法に使う
     '''
     https://discuss.pytorch.org/t/binary-activation-function-with-pytorch/56674/4
     '''
     def __init__(self):
-        super(StraightThroughEstimator, self).__init__()
-    def forward(self, x):
-        x = STEFunction.apply(x)
+        super(StraightThroughEstimator, self).__init__() # super(親クラスのオブジェクト, self).親クラスのメソッド　で親クラスで定義したメソッドを継承して使える
+    def forward(self, x): # 順伝搬
+        x = STEFunction.apply(x) # 入力ｘに対してSTEFunction.applyメソッドを呼び出してバイナリ活性化とストレートスルー推定を適用, バイナリ活性化関数の勾配消失問題を回避するため？
         return x
 
 ##############################################
-class CausalityMapBlock(nn.Module):
+class CausalityMapBlock(nn.Module): # 因果マップを計算、出力するクラス, forward()で特徴マップxを入力し因果マップcausality_mapsを出力
     def __init__(self, elems, causality_method, fixed_lehmer_param=None):
         '''
         elems: (int) square of the number of elements in each featuremap at the conv bottleneck, (eg: F=3x3=9-->81)
@@ -42,40 +42,40 @@ class CausalityMapBlock(nn.Module):
         fixed_lehmer_param: (float) power of the Lehmer Mean, such as -2.0, 0.0, or 1.0, etc.
             When it is not passed - it is None - this makes the lehmer_seed learnable by backprop with torch.nn.Parameter...(to be continued)
         '''
-        super(CausalityMapBlock, self).__init__()
-        self.elems = elems
-        self.causality_method =causality_method
-        if self.causality_method=="lehmer":
-            if fixed_lehmer_param is not None:
-                self.lehmer_seed=float(fixed_lehmer_param)
-            else:
-                self.lehmer_seed=torch.nn.Parameter(torch.tensor([0.0],device="cuda")) 
-            print(f"INIT - CausalityMapBlock: LEHMER with self.lehmer_seed={self.lehmer_seed}")
+        super(CausalityMapBlock, self).__init__() # 親クラスの初期化メソッドを呼び出す
+        self.elems = elems # 引数をクラスのインスタンス変数として保存, 特徴マップのチャネル数？
+        self.causality_method =causality_method # 引数をクラスのインスタンス変数として保存
+        if self.causality_method=="lehmer": # レーマー法で因果的特徴抽出を行う場合
+            if fixed_lehmer_param is not None: # 固定されたレーマーパラメータを引数として渡している場合
+                self.lehmer_seed=float(fixed_lehmer_param) # fixed_lehmer_paramをfloat型に変換してself.lehmer_seedに格納
+            else: # 渡していない場合
+                self.lehmer_seed=torch.nn.Parameter(torch.tensor([0.0],device="cuda")) # 0.0を含むテンソルを生成し、device="cuda"でcuda上に配置, torch.nn.Parameter()は学習可能なパラメータを生成する関数
+            print(f"INIT - CausalityMapBlock: LEHMER with self.lehmer_seed={self.lehmer_seed}") # レーマー法で使うパラメータを初期化完了したことを表示
         else: #"max"
-            print(f"INIT - CausalityMapBlock self.causality_method: {self.causality_method}")
+            print(f"INIT - CausalityMapBlock self.causality_method: {self.causality_method}") # 因果的特徴抽出がMax法であることを表示
 
-    def forward(self,x): #(bs,k,n,n)   
+    def forward(self,x): #(bs,k,n,n), 順伝搬
         
-        if torch.isnan(x).any():
-            print(f"...the current feature maps object contains NaN")
-            raise ValueError
-        maximum_values = torch.max(torch.flatten(x,2), dim=2)[0]  #flatten: (bs,k,n*n), max: (bs,k) 
-        MAX_F = torch.max(maximum_values, dim=1)[0]  #MAX: (bs,) 
-        x_div_max=x/(MAX_F.unsqueeze(1).unsqueeze(2).unsqueeze(3) +1e-8) #TODO added epsilon; #implement batch-division: each element of each feature map gets divided by the respective MAX_F of that batch
-        x = torch.nan_to_num(x_div_max, nan = 0.0)
+        if torch.isnan(x).any(): # テンソル'x'にNaN値が含まれている場合, torch.isnan(x)はxの各要素にNaN値があるかどうかチェックし、同じ形状のBool値を返す（NaN値をTrue、そのほかをFalse）, .any()はプールテンソル全体に一つでもTrueがあれば全体としてTrueを返す
+            print(f"...the current feature maps object contains NaN") # 特徴マップにNaN値が含まれていることを表示
+            raise ValueError # エラーを発生させる
+        maximum_values = torch.max(torch.flatten(x,2), dim=2)[0] # flatten: (bs,k,n*n)、bsはバッチサイズ, (bs, k, n, n)を2次元目（3つ目）から平滑化して(bs,k,n*n)、2次元目（3つ目）にそって最大値取得（n*n行列をを一列に平滑化した列の最大値） max: (bs,k), torch.flatten(x,2)によりxを2次元目（3つ目）から平滑化, torch.max(テンソル, dim=2)[0]によりテンソルを2次元目（3つ目の次元）にそって最大値を取得、[0]は最大値、[1]はそのindexを返す, 特徴マップは
+        MAX_F = torch.max(maximum_values, dim=1)[0]  #MAX: (bs,), maximum_valuesの1次元（２つめ）に沿って最大値を取得, 一つのバッチ内の最大値を取得
+        x_div_max=x/(MAX_F.unsqueeze(1).unsqueeze(2).unsqueeze(3) + 1e-8) #TODO added epsilon; #implement batch-division: each element of each feature map gets divided by the respective MAX_F of that batch, xの要素をバッチごとの最大値で割ることによって正規化, 1e-8はゼロ除算を回避
+        x = torch.nan_to_num(x_div_max, nan = 0.0) # nan_to_num()により計算の過程で発生するNaN値を0に変換
 
         ## After having normalized the feature maps, comes the distinction between the method by which computing causality.
         #Note: to prevent ill posed divisions and operations, we sometimes add small epsilon (e.g., 1e-8) and nan_to_num() command.
-        if self.causality_method == "max": #Option 1 : max values
+        if self.causality_method == "max": #Option 1 : max values, Max法で因果的特徴抽出を行う場合
 
-            sum_values = torch.sum(torch.flatten(x,2), dim=2)
-            if torch.sum(torch.isnan(sum_values))>0:
-                sum_values = torch.nan_to_num(sum_values,nan=0.0)#sostituire gli eventuali nan con degli zeri
-           
-            maximum_values = torch.max(torch.flatten(x,2), dim=2)[0]  
-            mtrx = torch.einsum('bi,bj->bij',maximum_values,maximum_values) #batch-wise outer product, the max value of mtrx object is 1.0
-            tmp = mtrx/(sum_values.unsqueeze(1) +1e-8) #TODO added epsilon
-            causality_maps = torch.nan_to_num(tmp, nan = 0.0)
+            sum_values = torch.sum(torch.flatten(x,2), dim=2) # それぞれのn*n行列を一列に平滑化し、その一列の要素の合計をsum_valuesに格納
+            if torch.sum(torch.isnan(sum_values))>0: # is_nan()によりsum_valuesの要素の中のNaN値をTrue、そのほかをFalseとし、sum_valuesと同じ形状のテンソルで返し、そのテンソルのTrue（1）の合計が0より大きい場合、中にNaN値が含まれていることになるので、その場合
+                sum_values = torch.nan_to_num(sum_values,nan=0.0)#sostituire gli eventuali nan con degli zeri, NaN値を0.0に変換
+            
+            maximum_values = torch.max(torch.flatten(x,2), dim=2)[0] # maximum_valuesの1次元（２つめ）に沿って最大値を取得, 一つのバッチ内の最大値を取得
+            mtrx = torch.einsum('bi,bj->bij',maximum_values,maximum_values) #batch-wise outer product, the max value of mtrx object is 1.0, ２つの行列（今回は同じ行列）の要素の順序を考慮したすべての要素同士の積を要素に持つ行列（k×ｋ）を格納, torch.einsum()はサブテキストの指定に応じて渡したテンソルを計算する, 
+            tmp = mtrx/(sum_values.unsqueeze(1) +1e-8) #TODO added epsilon, 特徴マップごとの要素の和を次元を調整、ゼロ除算を回避するための調整をしてmtrxに割ることによってMax法による因果マップを計算
+            causality_maps = torch.nan_to_num(tmp, nan = 0.0) # NaN値を0.0に変換
 
         elif self.causality_method == "lehmer": #Option 2 : Lehmer mean   
             
@@ -113,10 +113,10 @@ class CausalityMapBlock(nn.Module):
             raise NotImplementedError
 
         # print(causality_maps)    
-        return causality_maps
+        return causality_maps #因果マップを出力
 
 
-class CausalityFactorsExtractor(nn.Module):
+class CausalityFactorsExtractor(nn.Module): # Mulcat手法の実装
     def __init__(self, causality_direction, causality_setting):
         
         super(CausalityFactorsExtractor, self).__init__()
@@ -172,136 +172,136 @@ class CausalityFactorsExtractor(nn.Module):
         ## Directly return the "attended" ("causally"-weighted) version of x
         return torch.einsum('bkmn,bk->bkmn', x, causes_mul_factors)#multiply each (rectified) factor for the corresponding 2D feature map, for every minibatch
 
-class Identity(nn.Module):
+class Identity(nn.Module): # 入力をそのまま出力する関数を定義しているクラス
     def __init__(self):
-        super(Identity, self).__init__()
-    def forward(self, x):
-        return x
+        super(Identity, self).__init__() # nn.Moduleの__init__を継承
+    def forward(self, x): 
+        return x # 入力をそのまま出力する
 
 # use this version, whose code have been cleaned, removed unnecessary parts, and improved globally.
 class Resnet18CA_clean(nn.Module):
     def __init__(self, dim, channels, num_classes, is_pretrained, is_feature_extractor, causality_aware=False, causality_method="max", LEHMER_PARAM=None, causality_setting="cat", visual_attention=False, MULCAT_CAUSES_OR_EFFECTS="causes"):
             super(Resnet18CA_clean, self).__init__()
-            self.img_size = dim
-            self.channels = channels
-            self.num_classes = num_classes
-            self.is_pretrained = is_pretrained
-            self.is_feature_extractor = is_feature_extractor
+            self.img_size = dim # 入力画像のサイズ
+            self.channels = channels # チャネル数
+            self.num_classes = num_classes # 分類クラスの数
+            self.is_pretrained = is_pretrained # 事前学習済みモデルを使用するかどうか
+            self.is_feature_extractor = is_feature_extractor # feature_extractorとして使用するかどうか, [True, False]
             
-            self.causality_aware = causality_aware
-            self.causality_method = causality_method
-            self.causality_setting = causality_setting #
+            self.causality_aware = causality_aware # 画像内の因果関係を考慮した分類を行うかどうか, [True, False]
+            self.causality_method = causality_method # 画像内の因果的信号をどのように計算するか, ["max", "lehmer"]
+            self.causality_setting = causality_setting # 手法の選択, ["cat", "mulcat", "mul"]
 
-            if LEHMER_PARAM is not None:
-                self.LEHMER_PARAM = LEHMER_PARAM
+            if LEHMER_PARAM is not None: # レーマー法のパラメータを引数に渡した場合
+                self.LEHMER_PARAM = LEHMER_PARAM # その引数をself.LEHMER_PARAMに格納
 
             # self.visual_attention = visual_attention #boolean
-            self.MULCAT_CAUSES_OR_EFFECTS = MULCAT_CAUSES_OR_EFFECTS #TODO 21 luglio
+            self.MULCAT_CAUSES_OR_EFFECTS = MULCAT_CAUSES_OR_EFFECTS #TODO 21 luglio, 引数MULCAT_CAUSES_OR_EFFECTSをself.MULCAT_CAUSES_OR_EFFECTSに格納
 
-            if self.is_pretrained:
+            if self.is_pretrained: # 事前学習済みモデルを使用する場合
                 print("is_pretrained=True-------->loading imagenet weights")
-                model = resnet18(pretrained=True)
-            else:
+                model = resnet18(pretrained=True) # ImageNet（カラー画像のデータベース）で学習された重みを使用, modelに学習された重みをロードさせたResnet18を格納, この重みは一般的な画像分類タスクに対して良い初期値を提供するためモデルの収束が早くなる
+            else: # 事前学習済みモデルを使用しない場合
                 print("is_pretrained=False---------->init random weights")
-                model = resnet18()
+                model = resnet18() # ランダムに初期化された重みをもつResnet18を作成
 
-            if self.channels == 1:
-                model.conv1 = nn.Conv2d(1, 64,kernel_size=7, stride=2, padding=3, bias=False, device='cpu') #output_size = ((input_size - kernel_size + 2 * padding) / stride) + 1
-            elif self.channels==3:
-                if self.is_feature_extractor:
+            if self.channels == 1: # チャネルが一つの場合, グレースケール画像のこと               
+                model.conv1 = nn.Conv2d(1, 64,kernel_size=7, stride=2, padding=3, bias=False, device='cpu') #output_size = ((input_size - kernel_size + 2 * padding) / stride) + 1, ぐれーすけーるに対応した最初の畳み込み層を作成, 入力チャネル1、出力チャネル64(フィルタが64個）、カーネルサイズ7、ストライド2、パディング3、バイアス項なし、使用デバイス
+            elif self.channels==3: # チャネルが3場合, カラー画像（RGB画像）のこと, カラー画像は赤（R）、緑（G）、青（B）の3舞の画像の重ね合わせで表現される, この3枚の画像をチャネルという
+                if self.is_feature_extractor: # 特徴抽出器として使用する場合
                     for param in model.parameters(): #freeze the extraction layers
-                        param.requires_grad = False
+                        param.requires_grad = False # モデルのすべてのパラメータの'required_grad'を'False'に設定, モデルのパラメータが固定されて学習時に更新されなくなる
             
-            self.starting_block = nn.Sequential(model.conv1, model.bn1, model.relu, model.maxpool) #output size is halved
+            self.starting_block = nn.Sequential(model.conv1, model.bn1, model.relu, model.maxpool) #output size is halved # nn.Sequential()で複数の層を順番に通過するように設定, conv1(畳み込み層)、bn1(バッチ正則化層、層が深くなるについて勾配が焼失しうまく学習できなくなる問題を回避宇するために身にバッチ全体のデータを正則化する)
             # self.starting_block = nn.Sequential(model.conv1, model.bn1, nn.LeakyReLU(), model.maxpool) #output size is halved
 
-            self.layer1 = model.layer1 #output size is halved
+            self.layer1 = model.layer1 #output size is halved, 作成したモデルの第１層を抽出し、self.layer1に格納, 出力サイズが半分になる？
             self.layer2 = model.layer2 #output size is halved
             self.layer3 = model.layer3 #output size is halved
             self.layer4 = model.layer4 #output size is halved
 
-            model.avgpool = Identity() # Cancel adaptiveavgpool2d layer to get feature maps of size, say, 7x7       
-            model.fc = Identity() # Cancel classification layer to get only feature extractor
-            self.ending_block = nn.Sequential(model.avgpool, model.fc)            
+            model.avgpool = Identity() # Cancel adaptiveavgpool2d layer to get feature maps of size, say, 7x7, Resnet18では最終層の'AdaptiveAvgPool2d'レイヤにより最終的な512枚の特徴マップ（7×7）の各要素の平均をとって512枚の特徴マップが1×1になるが、それをIdentity()でキャンセルし、7×7の特徴マップが出力されるようにする,        
+            model.fc = Identity() # Cancel classification layer to get only feature extractor, 分類を行うための全結合層model.fcをIdentityに置き換えることで、この層をスキップし、特徴抽出のみを行う
+            self.ending_block = nn.Sequential(model.avgpool, model.fc) # 上記の二つの層をまとめて一つのブロックにする            
 
-            self.last_ftrmap_size = int(self.img_size/(2**5)) #outputsize is the original one divided by 32.
-            self.last_ftrmap_number = 512 #TODO 512 for ResNet18
+            self.last_ftrmap_size = int(self.img_size/(2**5)) #outputsize is the original one divided by 32., 畳み込み層とプーリング層を通過するとサイズが半分になる。その操作を5回繰り返すので、self.img_sizeを2の5乗（３２）を割った値をself.last_ftrmap_sizeに格納, 入力画像サイズが224×224の場合特徴マップのサイズは7×7となる
+            self.last_ftrmap_number = 512 #TODO 512 for ResNet18, 最終的な特徴マップのチャネル数を512とする
 
-            if self.causality_aware:
+            if self.causality_aware: # 因果関係を考慮する場合
                 ## initialize the modules for causality-driven networks
-                if LEHMER_PARAM is not None:
-                    self.causality_map_extractor = CausalityMapBlock(elems=self.last_ftrmap_number, causality_method=self.causality_method, fixed_lehmer_param = self.LEHMER_PARAM)
+                if LEHMER_PARAM is not None: # レーマーパラメータを引数に渡していた場合
+                    self.causality_map_extractor = CausalityMapBlock(elems=self.last_ftrmap_number, causality_method=self.causality_method, fixed_lehmer_param = self.LEHMER_PARAM) # レーマーパラメータも引数として渡して因果マップ生成クラスをself.causality_map_extractorとしてインスタンス化
                 else:
-                    self.causality_map_extractor = CausalityMapBlock(elems=self.last_ftrmap_number, causality_method=self.causality_method)
+                    self.causality_map_extractor = CausalityMapBlock(elems=self.last_ftrmap_number, causality_method=self.causality_method) # レーマーパラメータを引数として渡さず因果マップ生成クラスをself.causality_map_extractorとしてインスタンス化
 
-                self.causality_factors_extractor = CausalityFactorsExtractor(self.MULCAT_CAUSES_OR_EFFECTS, causality_setting)
+                self.causality_factors_extractor = CausalityFactorsExtractor(self.MULCAT_CAUSES_OR_EFFECTS, causality_setting) # Mulcat手法による因果的特徴抽出クラスをself.causality_factors_extractorとしてインスタンス化
                 ## and then set the classifier dimension, accordingly
-                if self.causality_setting == "cat": #[1, n*n*k + k*k]
-                    self.classifier = nn.Linear(self.last_ftrmap_number * self.last_ftrmap_size * self.last_ftrmap_size + self.last_ftrmap_number*self.last_ftrmap_number, self.num_classes)
-                elif (self.causality_setting == "mulcat") or (self.causality_setting == "mulcatbool"): #[1, 2*n*n*k]
-                    self.classifier = nn.Linear(2 * self.last_ftrmap_number * self.last_ftrmap_size * self.last_ftrmap_size, self.num_classes)
-                elif self.causality_setting == "mul" or self.causality_setting == "mulbool": #TODO 18 settembre
-                    self.classifier = nn.Linear(self.last_ftrmap_number * self.last_ftrmap_size * self.last_ftrmap_size, self.num_classes)
+                if self.causality_setting == "cat": #[1, n*n*k + k*k], Cat手法を用いる場合
+                    self.classifier = nn.Linear(self.last_ftrmap_number * self.last_ftrmap_size * self.last_ftrmap_size + self.last_ftrmap_number*self.last_ftrmap_number, self.num_classes) # 画像分類器の線形層を定義, nn.Linear(入力サイズ, 出力サイズ)はインスタンス化した後の引数xが（まず[1, 渡した入力サイズ]になるよう連結し？）重みとバイアスによるネットワークを介して[1, 渡した出力サイズ]形状になるように出力する, (特徴マップのチャネル数（k=512）*特徴マップのサイズ（n=7）*特徴マップのサイズ（n=7）, 分類クラス数)。これはResnet18の場合のパラメータ
+                elif (self.causality_setting == "mulcat") or (self.causality_setting == "mulcatbool"): #[1, 2*n*n*k], Mulcat手法を用いる場合
+                    self.classifier = nn.Linear(2 * self.last_ftrmap_number * self.last_ftrmap_size * self.last_ftrmap_size, self.num_classes) # [1, 2*n*n*k]になるように特徴マップを連結
+                elif self.causality_setting == "mul" or self.causality_setting == "mulbool": #TODO 18 settembre, どの手法かわからない
+                    self.classifier = nn.Linear(self.last_ftrmap_number * self.last_ftrmap_size * self.last_ftrmap_size, self.num_classes) # [1, n*n*k]になるように特徴マップを連結
            
-            else: #regular, not causally driven network
+            else: #regular, not causally driven network, 因果的特徴を考慮しない場合
                 # if self.visual_attention: #TODO hardcoded, considerando attn2_4 e attn3_4, intanto solo per la versione non causale, poi preparare il codice anche per quela causale quindi mettere anche nel IF sopra
                 #     self.classifier = nn.Linear(128*12*12 + 256*6*6 + 512*self.last_ftrmap_size*self.last_ftrmap_size, self.num_classes)
                 # else:
-                    self.classifier = nn.Linear(self.last_ftrmap_number * self.last_ftrmap_size * self.last_ftrmap_size, self.num_classes)
+                    self.classifier = nn.Linear(self.last_ftrmap_number * self.last_ftrmap_size * self.last_ftrmap_size, self.num_classes) # [1, n*n*k]になるように特徴マップを連結
 
 
             # self.STE = StraightThroughEstimator() #Bengio et al 2013
-            self.softmax = nn.Softmax(dim=1) #TODO 12 luglio, added
+            self.softmax = nn.Softmax(dim=1) #TODO 12 luglio, added, テンソルの値を0から1の確率に変換するSoftmax関数をインスタンス変数に格納, dim=1は1次元目(２つめ)に沿ってソフトマックスを適用
 
             # self.softmax = nn.LogSoftmax(dim=1) #TODO 26 ottobre
 
-    def forward(self, x):
-        if torch.isnan(x).any():
+    def forward(self, x): # 入力：画像データx, 出力：特徴マップx, 因果マップcausality_map
+        if torch.isnan(x).any(): # 入力テンソルxにNaN値がある場合, isnan(x)でxの要素をNaN値をTrue、そのほかをFalseに変換して同じ形状のまま返す, any()は要素の中のいずれか一つでもTrueがある場合、全体としてTrueを返す
             print("Personal error: FORWARD - the input was corrupted with NaN")
-            raise ValueError
+            raise ValueError # エラーを発生
 
         # print(f"forward - x: {x.size()}")
-        x = self.starting_block(x)
+        x = self.starting_block(x) # xを設定したself.starting_blockに通す
         # print(f"forward - x strblk: {x.size()}")
-        x_layer1 = self.layer1(x)
+        x_layer1 = self.layer1(x) # 
         # print(f"forward - x_layer1: {x_layer1.size()}")
         x_layer2 = self.layer2(x_layer1)
         # print(f"forward - x_layer2: {x_layer2.size()}")
         x_layer3 = self.layer3(x_layer2)
         # print(f"forward - x_layer3: {x_layer3.size()}")
-        x_layer4 = self.layer4(x_layer3)
+        x_layer4 = self.layer4(x_layer3) # ResNet18にもともと定義されていた4層のレイヤに順番に通す
         # print(f"forward - x_layer4: {x_layer4.size()}")
-        x = self.ending_block(x_layer4)
+        x = self.ending_block(x_layer4) # 設定した最終層に通す, 通常の最終層で行うavgpool（7×7×512を1×1×512に変換）、fc(全結合層1×分類クラス数)をキャンセルした層
         # print(f"forward - x ednblk: {x.size()}")
       
-        if torch.isnan(x).any():
+        if torch.isnan(x).any(): # NaN値がある場合
             print("Personal error: FORWARD - after passing through the feature extractor (conv net), x was corrupted with NaN")
-            raise ValueError
+            raise ValueError # エラーを発生させる
         
-        if list(x.size()) != [int(x.size(0)), self.last_ftrmap_number, self.last_ftrmap_size, self.last_ftrmap_size]:
-            x = torch.reshape(x, (int(x.size(0)), self.last_ftrmap_number, self.last_ftrmap_size, self.last_ftrmap_size))
+        if list(x.size()) != [int(x.size(0)), self.last_ftrmap_number, self.last_ftrmap_size, self.last_ftrmap_size]: # xの形状が期待された形状(k×n×n、ResNet18の場合512×7×7)でない場合
+            x = torch.reshape(x, (int(x.size(0)), self.last_ftrmap_number, self.last_ftrmap_size, self.last_ftrmap_size)) # xを期待された形状(k×n×n、ResNet18の場合512×7×7)に再調整する
 
-        causality_maps = None #initialized to none
+        causality_maps = None #initialized to none, # 因果マップをNoneで初期化
 
         if self.causality_aware:
             causality_maps = self.causality_map_extractor(x)       
                  
-            if self.causality_setting == "cat":
-                    x = torch.cat((torch.flatten(x, 1), torch.flatten(causality_maps, 1)), dim=1)
-            elif self.causality_setting == "mul" or self.causality_setting == "mulbool":
+            if self.causality_setting == "cat": # 分類がcat手法の場合
+                    x = torch.cat((torch.flatten(x, 1), torch.flatten(causality_maps, 1)), dim=1) # 特徴マップx、因果マップをバッチごとに一列に平滑化し横軸に沿って連結
+            elif self.causality_setting == "mul" or self.causality_setting == "mulbool": # 分類がmul手法の場合
                     x_c = self.causality_factors_extractor(x, causality_maps)
                     x = torch.flatten(x_c, 1) #substitute the actual features with the filtered version of them.
-            elif self.causality_setting == "mulcat" or self.causality_setting == "mulcatbool": #need to concatenate the x_c to the actual original features x
+            elif self.causality_setting == "mulcat" or self.causality_setting == "mulcatbool": #need to concatenate the x_c to the actual original features x, 画像分類の手法がmulcat手法の場合
                     x_c = self.causality_factors_extractor(x, causality_maps)
                     x = torch.cat((torch.flatten(x, 1), torch.flatten(x_c, 1)), dim=1) #cat the feature maps with their causality-enhanced version  
         
-        else: #traditional, non causal:
-            x = torch.flatten(x, 1) # flatten all dimensions except batch      
+        else: #traditional, non causal:, 従来のCNNの場合
+            x = torch.flatten(x, 1) # flatten all dimensions except batch, 特徴マップをバッチごとに一列に平滑化
    
-        x = self.classifier(x)
-        x = self.softmax(x) 
+        x = self.classifier(x) # 一列に平滑化された特徴テンソル（1×分類クラス数）に応じたスコア（1×クラス数）に重みとバイアスを介して線形変換
+        x = self.softmax(x)  # ソフトマックス関数をかませることにより、値を確率に変換
 
-        return x, causality_maps #return the logit of the classification, and the causality maps for optional visualization or some metric manipulation during training
+        return x, causality_maps #return the logit of the classification, and the causality maps for optional visualization or some metric manipulation during training, 特徴マップxと因果マップcausality_mapを出力
     
 
 
